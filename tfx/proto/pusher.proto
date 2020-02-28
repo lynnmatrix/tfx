@@ -29,6 +29,33 @@ message PushDestination {
     // must have write permission on this directory.
     string base_directory = 1;
 
-    reserved 2,3;
+    // Version name would be used as a sub-directory name under the
+    // `base_directory`. (e.g. base_directory/1582798459)
+    Versioning versioning = 6;
+
+    reserved 2, 3, 4, 5;
   }
+}
+
+// Versioning method for the model to be pushed. Note that This is the semantic
+// TFX provides, therefore depending on the platform, some versioning method
+// might not be compatible. For example TF Serving only accepts an integer
+// version that is monotonically increasing, so you can only use UNIX_TIMESTAMP
+// and MODEL_ARTIFACT_ID.
+enum Versioning {
+  // Automatically select the best versioning methods depending on the push
+  // destination.
+  AUTO = 0;
+
+  // Integer version (can be used as a string as well).
+  // Unix epoch timestamp in seconds of the model push time (e.g. 1582798459).
+  // Timestamp is freshly generated every time model is pushed, even if the
+  // model is the same.
+  UNIX_TIMESTAMP = 1;
+
+  // Integer version (can be used as a string as well).
+  // Use ID of the Model artifact (produced from Trainer, consumed in Pusher)
+  // as a version name. Artifact ID is a monotonically increasing integer. This
+  // ensures the same model to have the same version.
+  MODEL_ARTIFACT_ID = 2;
 }

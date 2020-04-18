@@ -18,16 +18,19 @@ from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
-from typing import Any, Dict, List, Text
+from typing import Any, Dict, List, Text, Union
 
 import jinja2
 
 from tfx import types
 from tfx.components.base import executor_spec
+from tfx.dsl.components import _command_line_resolver
+from tfx.dsl.components import structures
 
 
 def resolve_container_template(
-    container_spec_tmpl: executor_spec.ExecutorContainerSpec,
+    container_spec_tmpl: Union[executor_spec.ExecutorContainerSpec,
+                               structures.ContainerSpec],
     input_dict: Dict[Text, List[types.Artifact]],
     output_dict: Dict[Text, List[types.Artifact]],
     exec_properties: Dict[Text, Any]) -> executor_spec.ExecutorContainerSpec:
@@ -47,6 +50,16 @@ def resolve_container_template(
       'output_dict': output_dict,
       'exec_properties': exec_properties,
   }
+  if isinstance(container_spec_tmpl, structures.ContainerSpec):
+    return executor_spec.ExecutorContainerSpec(
+        image=container_spec_tmpl.image,
+        command=resolve_container_command_line(
+            container_spec=container_spec_tmpl,
+            input_dict=input_dict,
+            output_dict=output_dict,
+            exec_properties=exec_properties,
+        ),
+    )
   return executor_spec.ExecutorContainerSpec(
       image=_render_text(container_spec_tmpl.image, context),
       command=_render_items(container_spec_tmpl.command, context),
@@ -62,6 +75,42 @@ def _render_items(items: List[Text], context: Dict[Text, Any]) -> List[Text]:
 
 def _render_text(text: Text, context: Dict[Text, Any]) -> Text:
   return jinja2.Template(text).render(context)
+
+
+def resolve_container_command_line(
+    container_spec: structures.ContainerSpec,
+    input_dict: Dict[Text, List[types.Artifact]],
+    output_dict: Dict[Text, List[types.Artifact]],
+    exec_properties: Dict[Text, Any],
+) -> List[Text]:
+  """Resolves placeholders in the command line of a container.
+
+  Args:
+    container_spec: Container structure to resolve
+    input_dict: Dictionary of input artifacts consumed by this component.
+    output_dict: Dictionary of output artifacts produced by this component.
+    exec_properties: Dictionary of execution properties.
+
+  Returns:
+    Resolved command line.
+  """
+
+  def input_value_getter(input_name) -> Text:
+    return exec_properties[input_name]
+
+  def input_uri_getter(input_name) -> Text:
+    return input_dict[input_name][0].uri
+
+  def output_uri_getter(output_name) -> Text:
+    return output_dict[output_name][0].uri
+
+  resolved_command_line = _command_line_resolver.resolve_command_line(
+      container_spec=container_spec,
+      input_value_getter=input_value_getter,
+      input_uri_getter=input_uri_getter,
+      output_uri_getter=output_uri_getter,
+  )
+  return resolved_command_line
 
 
 def to_swagger_dict(config: Any) -> Any:

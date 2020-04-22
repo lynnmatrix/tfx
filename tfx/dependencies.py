@@ -32,10 +32,8 @@ def make_required_install_packages():
       'google-api-python-client>=1.7.8,<2',
       'grpcio>=1.25,!=1.27.2,<2',
       'jinja2>=2.7.3,<3',
-      'kubernetes>=10.0.1,<12',
-      # LINT.IfChange
+      'kubernetes>=10.0.1,<11',
       'ml-metadata>=0.21.2,<0.22',
-      # LINT.ThenChange(//tfx/workspace.bzl)
       'protobuf>=3.7,<4',
       'pyarrow>=0.15,<0.16',
       'pyyaml>=5,<6',
@@ -54,7 +52,7 @@ def make_required_test_packages():
   return [
       'apache-airflow>=1.10,<2',
       # LINT.IfChange
-      'kfp>=0.4.0,<0.5; python_version >= "3.0"',
+      'kfp>=0.3.0,<0.4; python_version >= "3.0"',
       # LINT.ThenChange(
       #     testing/github/common.sh,
       #     testing/github/ubuntu/image/image.sh,

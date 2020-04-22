@@ -41,7 +41,6 @@ class KubeflowEndToEndTest(test_utils.BaseKubeflowTest):
     pipeline = self._create_pipeline(pipeline_name, components)
 
     self._compile_and_run_pipeline(pipeline)
-    self._assert_infra_validator_passed(pipeline_name)
 
   def testPrimitiveEnd2EndPipeline(self):
     """End-to-End test for primitive artifacts passing."""
@@ -53,7 +52,7 @@ class KubeflowEndToEndTest(test_utils.BaseKubeflowTest):
         pipeline=pipeline, workflow_name=pipeline_name + '-run-1')
     # Test if the correct value has been passed.
     str_artifacts = self._get_artifacts_with_type_and_pipeline(
-        type_name='String', pipeline_name=pipeline_name)
+        type_name='StringType', pipeline_name=pipeline_name)
     # There should be exactly one string artifact.
     self.assertEqual(1, len(str_artifacts))
     self.assertEqual(

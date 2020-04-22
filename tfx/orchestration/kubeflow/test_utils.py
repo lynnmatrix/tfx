@@ -43,7 +43,6 @@ from ml_metadata.proto import metadata_store_service_pb2_grpc
 from tfx.components import CsvExampleGen
 from tfx.components import Evaluator
 from tfx.components import ExampleValidator
-from tfx.components import InfraValidator
 from tfx.components import Pusher
 from tfx.components import ResolverNode
 from tfx.components import SchemaGen
@@ -57,7 +56,6 @@ from tfx.orchestration import metadata
 from tfx.orchestration import pipeline as tfx_pipeline
 from tfx.orchestration.kubeflow import kubeflow_dag_runner
 from tfx.orchestration.kubeflow.proto import kubeflow_pb2
-from tfx.proto import infra_validator_pb2
 from tfx.proto import pusher_pb2
 from tfx.proto import trainer_pb2
 from tfx.types import Channel
@@ -98,7 +96,7 @@ class _HelloWorldSpec(component_spec.ComponentSpec):
   INPUTS = {}
   OUTPUTS = {
       'greeting':
-          component_spec.ChannelParameter(type=standard_artifacts.String)
+          component_spec.ChannelParameter(type=standard_artifacts.StringType)
   }
   PARAMETERS = {
       'word': component_spec.ExecutionParameter(type=str),
@@ -108,7 +106,7 @@ class _HelloWorldSpec(component_spec.ComponentSpec):
 class _ByeWorldSpec(component_spec.ComponentSpec):
   INPUTS = {
       'hearing':
-          component_spec.ChannelParameter(type=standard_artifacts.String)
+          component_spec.ChannelParameter(type=standard_artifacts.StringType)
   }
   OUTPUTS = {}
   PARAMETERS = {}
@@ -131,7 +129,7 @@ class HelloWorldComponent(BaseComponent):
 
   def __init__(self, word, greeting=None):
     if not greeting:
-      artifact = standard_artifacts.String()
+      artifact = standard_artifacts.StringType()
       greeting = channel_utils.as_channel([artifact])
     super(HelloWorldComponent,
           self).__init__(_HelloWorldSpec(word=word, greeting=greeting))
@@ -235,17 +233,6 @@ def create_e2e_components(
       model=trainer.outputs['model'],
       eval_config=eval_config)
 
-  infra_validator = InfraValidator(
-      model=trainer.outputs['model'],
-      examples=example_gen.outputs['examples'],
-      serving_spec=infra_validator_pb2.ServingSpec(
-          tensorflow_serving=infra_validator_pb2.TensorFlowServing(
-              tags=['latest']),
-          kubernetes=infra_validator_pb2.KubernetesConfig()),
-      request_spec=infra_validator_pb2.RequestSpec(
-          tensorflow_serving=infra_validator_pb2.TensorFlowServingRequestSpec())
-  )
-
   pusher = Pusher(
       model=trainer.outputs['model'],
       model_blessing=evaluator.outputs['blessing'],
@@ -254,16 +241,8 @@ def create_e2e_components(
               base_directory=os.path.join(pipeline_root, 'model_serving'))))
 
   return [
-      example_gen,
-      statistics_gen,
-      schema_gen,
-      example_validator,
-      transform,
-      latest_model_resolver,
-      trainer,
-      evaluator,
-      infra_validator,
-      pusher,
+      example_gen, statistics_gen, schema_gen, example_validator, transform,
+      latest_model_resolver, trainer, evaluator, pusher
   ]
 
 
@@ -421,13 +400,13 @@ class BaseKubeflowTest(tf.test.TestCase):
       self, string_artifact: metadata_store_pb2.Artifact) -> Text:
     """Helper function returns the actual value of a ValueArtifact."""
     file_path = os.path.join(string_artifact.uri,
-                             standard_artifacts.String.VALUE_FILE)
+                             standard_artifacts.StringType.VALUE_FILE)
     # Assert there is a file exists.
     if (not tf.io.gfile.exists(file_path)) or tf.io.gfile.isdir(file_path):
       raise RuntimeError(
           'Given path does not exist or is not a valid file: %s' % file_path)
     serialized_value = tf.io.gfile.GFile(file_path, 'rb').read()
-    return standard_artifacts.String().decode(serialized_value)
+    return standard_artifacts.StringType().decode(serialized_value)
 
   def _get_executions_by_pipeline_name(
       self, pipeline_name: Text) -> List[metadata_store_pb2.Execution]:
@@ -716,12 +695,3 @@ class BaseKubeflowTest(tf.test.TestCase):
         'Succeeded', status, 'Pipeline {} failed to complete successfully: {}'
         '\nFailed workflow logs:\n{}'.format(pipeline_name, status,
                                              logs_output))
-
-  def _assert_infra_validator_passed(self, pipeline_name: Text):
-    pipeline_root = self._pipeline_root(pipeline_name)
-    blessing_path = os.path.join(pipeline_root, 'InfraValidator', 'blessing')
-    executions = tf.io.gfile.listdir(blessing_path)
-    self.assertGreaterEqual(len(executions), 1)
-    for exec_id in executions:
-      blessed = os.path.join(blessing_path, exec_id, 'INFRA_BLESSED')
-      self.assertTrue(tf.io.gfile.exists(blessed))

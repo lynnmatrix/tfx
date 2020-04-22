@@ -12,31 +12,31 @@
 # WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
 # See the License for the specific language governing permissions and
 # limitations under the License.
-"""Tests for tfx.components.bulk_inferrer.component."""
+"""Tests for tfx.components.trainer.driver."""
 
 from __future__ import absolute_import
 from __future__ import division
 from __future__ import print_function
 
 import tensorflow as tf
-
-from tfx.components.bulk_inferrer import component
-from tfx.types import channel_utils
+from tfx.components.trainer import driver
 from tfx.types import standard_artifacts
 
 
-class ComponentTest(tf.test.TestCase):
+class DriverTest(tf.test.TestCase):
 
-  def testConstruct(self):
-    examples = standard_artifacts.Examples()
-    model = standard_artifacts.Model()
-    model_blessing = standard_artifacts.ModelBlessing()
-    bulk_inferrer = component.BulkInferrer(
-        examples=channel_utils.as_channel([examples]),
-        model=channel_utils.as_channel([model]),
-        model_blessing=channel_utils.as_channel([model_blessing]))
-    self.assertEqual('InferenceResult',
-                     bulk_inferrer.outputs['inference_result'].type_name)
+  def testFetchWarmStartingModel(self):
+    mock_metadata = tf.compat.v1.test.mock.Mock()
+    artifacts = []
+    for aid in [3, 2, 1]:
+      model = standard_artifacts.Model()
+      model.id = aid
+      model.uri = 'uri-%d' % aid
+      artifacts.append(model.mlmd_artifact)
+    mock_metadata.get_artifacts_by_type.return_value = artifacts
+    trainer_driver = driver.Driver(mock_metadata)
+    result = trainer_driver._fetch_latest_model()
+    self.assertEqual('uri-3', result)
 
 
 if __name__ == '__main__':

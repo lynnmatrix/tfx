@@ -141,23 +141,19 @@ class Metadata(object):
     # TODO(ruoyu): Establishing a connection pool instead of newing
     # a connection every time. Until then, check self._store before usage
     # in every method.
-    connection_error = None
     for _ in range(_MAX_INIT_RETRY):
       try:
         self._store = metadata_store.MetadataStore(self._connection_config)
-      except RuntimeError as err:
+      except RuntimeError:
         # MetadataStore could raise Aborted error if multiple concurrent
         # connections try to execute initialization DDL in database.
         # This is safe to retry.
-        connection_error = err
         time.sleep(random.random())
         continue
       else:
         return self
 
-    raise RuntimeError(
-        'Failed to establish connection to Metadata storage with error: %s' %
-        connection_error)
+    raise RuntimeError('Failed to establish connection to Metadata storage.')
 
   def __exit__(self, exc_type: Optional[Type[Exception]],
                exc_value: Optional[Exception],
@@ -577,11 +573,13 @@ class Metadata(object):
     registered_input_artifact_ids = set(
         e.artifact_id
         for e in events
-        if e.type == metadata_store_pb2.Event.INPUT)
+        if e.type == metadata_store_pb2.Event.INPUT
+    )
     registered_output_artifact_ids = set(
         e.artifact_id
         for e in events
-        if e.type == metadata_store_pb2.Event.OUTPUT)
+        if e.type == metadata_store_pb2.Event.OUTPUT
+    )
     artifacts_and_events = []
     if input_artifacts:
       artifacts_and_events.extend(
@@ -717,32 +715,9 @@ class Metadata(object):
   def _is_eligible_previous_execution(
       self, current_execution: metadata_store_pb2.Execution,
       target_execution: metadata_store_pb2.Execution) -> bool:
-    """Compare if the previous execution is same as current execution.
-
-    This method will ignore ID and time related fields.
-
-    Args:
-      current_execution: the current execution.
-      target_execution: the previous execution to be compared with.
-
-    Returns:
-      whether the previous and current executions are the same.
-    """
     current_execution.properties['run_id'].string_value = ''
     target_execution.properties['run_id'].string_value = ''
     current_execution.id = target_execution.id
-    # Skip comparing time sensitive fields.
-    # The execution might not have the create_time_since_epoch or
-    # create_time_since_epoch field if the execution is created by an old
-    # version before this field is introduced.
-    if hasattr(current_execution, 'create_time_since_epoch'):
-      current_execution.ClearField('create_time_since_epoch')
-    if hasattr(target_execution, 'create_time_since_epoch'):
-      target_execution.ClearField('create_time_since_epoch')
-    if hasattr(current_execution, 'last_update_time_since_epoch'):
-      current_execution.ClearField('last_update_time_since_epoch')
-    if hasattr(target_execution, 'last_update_time_since_epoch'):
-      target_execution.ClearField('last_update_time_since_epoch')
     return current_execution == target_execution
 
   def get_cached_outputs(

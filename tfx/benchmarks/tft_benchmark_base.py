@@ -183,8 +183,6 @@ class TFTBenchmarkBase(test.Benchmark):
   """TFT benchmark base class."""
 
   def __init__(self, dataset, **kwargs):
-    # Benchmark runners may pass extraneous arguments we don't care about.
-    del kwargs
     super(TFTBenchmarkBase, self).__init__()
     self._dataset = dataset
 

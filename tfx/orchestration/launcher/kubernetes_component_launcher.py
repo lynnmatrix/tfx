@@ -34,13 +34,23 @@ from tfx.orchestration.launcher import base_component_launcher
 from tfx.orchestration.launcher import container_common
 from tfx.utils import kube_utils
 
+# Name of the main container that Argo workflow launches.
+# https://github.com/argoproj/argo/blob/master/workflow/common/common.go#L14
+MAIN_CONTAINER_NAME = 'main'
+
+# Pod phases are defined in
+# https://kubernetes.io/docs/concepts/workloads/pods/pod-lifecycle/#pod-phase.
+_POD_PENDING_PHASE = 'Pending'
+_POD_SUCCEEDED_PHASE = 'Succeeded'
+_POD_FAILED_PHASE = 'Failed'
+
 
 def _pod_is_not_pending(resp: client.V1Pod):
-  return resp.status.phase != kube_utils.PodPhase.PENDING.value
+  return resp.status.phase != _POD_PENDING_PHASE
 
 
 def _pod_is_done(resp: client.V1Pod):
-  return kube_utils.PodPhase(resp.status.phase).is_done
+  return resp.status.phase in [_POD_SUCCEEDED_PHASE, _POD_FAILED_PHASE]
 
 
 def _sanitize_pod_name(pod_name: Text) -> Text:
@@ -149,7 +159,7 @@ class KubernetesComponentLauncher(base_component_launcher.BaseComponentLauncher
       logs = core_api.read_namespaced_pod_log(
           name=pod_name,
           namespace=namespace,
-          container=kube_utils.ARGO_MAIN_CONTAINER_NAME,
+          container=MAIN_CONTAINER_NAME,
           follow=True,
           _preload_content=False).stream()
     except client.rest.ApiException as e:
@@ -167,7 +177,7 @@ class KubernetesComponentLauncher(base_component_launcher.BaseComponentLauncher
         exit_condition_lambda=_pod_is_done,
         condition_description='done state')
 
-    if resp.status.phase == kube_utils.PodPhase.FAILED.value:
+    if resp.status.phase == _POD_FAILED_PHASE:
       raise RuntimeError('Pod "%s:%s" failed with status "%s".' %
                          (namespace, pod_name, resp.status))
 
@@ -210,11 +220,11 @@ class KubernetesComponentLauncher(base_component_launcher.BaseComponentLauncher
                                  [])  # type: List[Dict[Text, Any]]
     container = None  # type: Optional[Dict[Text, Any]]
     for c in containers:
-      if c['name'] == kube_utils.ARGO_MAIN_CONTAINER_NAME:
+      if c['name'] == MAIN_CONTAINER_NAME:
         container = c
         break
     if not container:
-      container = {'name': kube_utils.ARGO_MAIN_CONTAINER_NAME}
+      container = {'name': MAIN_CONTAINER_NAME}
       containers.append(container)
     container.update({
         'image': container_spec.image,
